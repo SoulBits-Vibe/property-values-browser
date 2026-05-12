@@ -1,0 +1,27 @@
+{
+  "name": "property-values-browser",
+  "version": "0.1.0",
+  "description": "Browse Obsidian frontmatter properties and their distinct values with counts.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "install-plugin": "node scripts/install-plugin.mjs",
+    "make-release": "node scripts/make-release.mjs"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "properties",
+    "frontmatter"
+  ],
+  "author": "destiny911",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.4.5"
+  }
+}

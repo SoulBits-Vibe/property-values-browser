@@ -1,0 +1,14 @@
+node_modules/
+
+# Build output
+main.js
+
+# Local/editor clutter
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Release artifacts
+dist/
+*.zip
