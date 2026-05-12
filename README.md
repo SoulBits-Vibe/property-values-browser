@@ -7,6 +7,8 @@ Property Values Browser is a small Obsidian plugin that adds a right-sidebar vie
 
 It is meant to feel like Obsidian's built-in All Properties panel, with one extra action: expand a property to see the distinct values used across the vault. Clicking a value opens Obsidian Search for that exact property/value pair.
 
+![Property Values Browser in Obsidian](docs/property-values-browser-screenshot.jpg)
+
 ## Features
 
 - Shows frontmatter property names with total counts.
