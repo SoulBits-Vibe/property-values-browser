@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Publish a fresh review release with direct Obsidian assets.
+
 ## 0.2.0
 
 - Add right-click delete actions for properties and values.
