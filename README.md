@@ -23,9 +23,9 @@ It is meant to feel like Obsidian's built-in All Properties panel, with one extr
 - Adds a ribbon icon and command palette command.
 - Includes a manual refresh button.
 
-## Manual install
+## Install
 
-Download `property-values-browser-0.2.0.zip` from a release and extract it into:
+Download the zip from the [latest release](https://github.com/SoulBits-Vibe/property-values-browser/releases/latest), then extract it into:
 
 ```text
 <your vault>/.obsidian/plugins/property-values-browser/
@@ -45,16 +45,3 @@ Then reload Obsidian and enable **Property Values Browser** in Community plugins
 
 - Delete actions update frontmatter in matching notes after confirmation, but the plugin does not provide its own undo history.
 - The list is based on Obsidian's metadata cache, so very recent file changes may need a refresh.
-
-## Install from source
-
-From this folder:
-
-```powershell
-npm install
-npm run build
-$env:OBSIDIAN_PLUGIN_DIR = "<your vault>/.obsidian/plugins/property-values-browser"
-npm run install-plugin
-```
-
-Then reload Obsidian and enable **Property Values Browser** in Community plugins.
