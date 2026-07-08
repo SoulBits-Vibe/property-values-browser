@@ -15,11 +15,10 @@
     "properties",
     "frontmatter"
   ],
-  "author": "destiny911",
+  "author": "SoulBits",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.30",
-    "builtin-modules": "^3.3.0",
     "esbuild": "^0.21.5",
     "obsidian": "^1.8.7",
     "typescript": "^5.4.5"

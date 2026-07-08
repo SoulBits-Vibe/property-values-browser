@@ -15,6 +15,7 @@ const VIEW_TYPE_PROPERTY_VALUES = "property-values-browser";
 const EMPTY_VALUE = "__PROPERTY_VALUES_BROWSER_EMPTY__";
 
 type ValueStats = Map<string, number>;
+type Frontmatter = Record<string, unknown>;
 
 interface MetadataTypeWidget {
   icon?: string;
@@ -53,13 +54,15 @@ export default class PropertyValuesBrowserPlugin extends Plugin {
     );
 
     this.addRibbonIcon("list-tree", "Open Property Values Browser", () => {
-      this.activateView();
+      void this.activateView();
     });
 
     this.addCommand({
-      id: "open-property-values-browser",
-      name: "Open Property Values Browser",
-      callback: () => this.activateView()
+      id: "open",
+      name: "Open browser",
+      callback: () => {
+        void this.activateView();
+      }
     });
 
     this.registerEvent(
@@ -74,7 +77,6 @@ export default class PropertyValuesBrowserPlugin extends Plugin {
       window.clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_PROPERTY_VALUES);
   }
 
   async activateView() {
@@ -90,7 +92,7 @@ export default class PropertyValuesBrowserPlugin extends Plugin {
       active: true
     });
 
-    this.app.workspace.revealLeaf(leaf);
+    await this.app.workspace.revealLeaf(leaf);
   }
 
   private scheduleRefresh() {
@@ -248,9 +250,9 @@ class PropertyValuesBrowserView extends ItemView {
       text: String(property.count)
     });
     countEl.setAttr("title", `Search notes with ${property.name}`);
-    countEl.addEventListener("click", async (event) => {
+    countEl.addEventListener("click", (event) => {
       event.stopPropagation();
-      await this.openSearch(property.name);
+      void this.openSearch(property.name);
     });
 
     row.addEventListener("contextmenu", (event) => {
@@ -302,8 +304,8 @@ class PropertyValuesBrowserView extends ItemView {
 
     let deletedCount = 0;
     for (const file of files) {
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-        if (Object.prototype.hasOwnProperty.call(frontmatter, propertyName)) {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
+        if (hasProperty(frontmatter, propertyName)) {
           delete frontmatter[propertyName];
           deletedCount += 1;
         }
@@ -338,9 +340,9 @@ class PropertyValuesBrowserView extends ItemView {
       this.showValueMenu(event, propertyName, value, label, count);
     });
 
-    row.addEventListener("click", async (event) => {
+    row.addEventListener("click", (event) => {
       event.stopPropagation();
-      await this.openSearch(propertyName, value);
+      void this.openSearch(propertyName, value);
     });
   }
 
@@ -370,8 +372,8 @@ class PropertyValuesBrowserView extends ItemView {
 
     let deletedCount = 0;
     for (const file of files) {
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-        if (!Object.prototype.hasOwnProperty.call(frontmatter, propertyName)) return;
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
+        if (!hasProperty(frontmatter, propertyName)) return;
 
         const result = removeValueFromProperty(frontmatter[propertyName], value);
         if (!result.changed) return;
@@ -408,7 +410,7 @@ class PropertyValuesBrowserView extends ItemView {
     const searchView = searchLeaf.view as { setQuery?: (query: string) => void };
     if (typeof searchView.setQuery === "function") {
       searchView.setQuery(query);
-      this.app.workspace.revealLeaf(searchLeaf);
+      await this.app.workspace.revealLeaf(searchLeaf);
     } else {
       await navigator.clipboard.writeText(query);
       new Notice(`Search query copied: ${query}`);
@@ -516,14 +518,14 @@ function collectPropertyStats(app: App): RenderedProperty[] {
 function getFilesWithProperty(app: App, propertyName: string): TFile[] {
   return app.vault.getMarkdownFiles().filter((file) => {
     const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-    return !!frontmatter && Object.prototype.hasOwnProperty.call(frontmatter, propertyName);
+    return !!frontmatter && hasProperty(frontmatter, propertyName);
   });
 }
 
 function getFilesWithPropertyValue(app: App, propertyName: string, value: string): TFile[] {
   return app.vault.getMarkdownFiles().filter((file) => {
     const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-    if (!frontmatter || !Object.prototype.hasOwnProperty.call(frontmatter, propertyName)) {
+    if (!frontmatter || !hasProperty(frontmatter, propertyName)) {
       return false;
     }
 
@@ -586,7 +588,7 @@ function addFileFrontmatter(properties: Map<string, PropertyStats>, file: TFile,
   const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
   if (!frontmatter) return;
 
-  for (const [name, rawValue] of Object.entries(frontmatter)) {
+  for (const [name, rawValue] of Object.entries(frontmatter as Frontmatter)) {
     if (name === "position") continue;
 
     const property = getOrCreateProperty(properties, name);
@@ -621,7 +623,10 @@ function normalizeValues(value: unknown): string[] {
       return [EMPTY_VALUE];
     }
 
-    return value.flatMap((item) => normalizeValues(item));
+    return value.reduce<string[]>((values, item: unknown) => {
+      values.push(...normalizeValues(item));
+      return values;
+    }, []);
   }
 
   return [String(value)];
@@ -635,6 +640,10 @@ function sortValueEntries(a: [string, number], b: [string, number]) {
 
 function getValueLabel(value: string) {
   return value === EMPTY_VALUE ? "(empty)" : value;
+}
+
+function hasProperty(frontmatter: object, propertyName: string): frontmatter is Frontmatter {
+  return Object.prototype.hasOwnProperty.call(frontmatter, propertyName);
 }
 
 function getPropertyIcon(app: App, propertyName: string) {

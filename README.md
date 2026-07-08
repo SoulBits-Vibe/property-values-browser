@@ -25,19 +25,13 @@ It is meant to feel like Obsidian's built-in All Properties panel, with one extr
 
 ## Install
 
-Download the zip from the [latest release](https://github.com/SoulBits-Vibe/property-values-browser/releases/latest), then extract it into:
+Download these three files from the [latest release](https://github.com/SoulBits-Vibe/property-values-browser/releases/latest):
 
-```text
-<your vault>/.obsidian/plugins/property-values-browser/
-```
-
-The folder should contain:
-
-```text
 main.js
 manifest.json
 styles.css
-```
+
+Put them in `<your vault>/.obsidian/plugins/property-values-browser/`.
 
 Then reload Obsidian and enable **Property Values Browser** in Community plugins.
 
