@@ -1,6 +1,6 @@
 {
   "name": "property-values-browser",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Browse Obsidian frontmatter properties and their distinct values with counts.",
   "main": "main.js",
   "scripts": {

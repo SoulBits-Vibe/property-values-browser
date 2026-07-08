@@ -1,8 +1,14 @@
 # Changelog
 
+## 0.2.2
+
+- Remove clipboard fallback behavior.
+- Add release asset provenance attestations.
+- Clean up frontmatter typing.
+
 ## 0.2.1
 
-- Publish a fresh review release with direct Obsidian assets.
+- Publish a patch release with direct Obsidian assets.
 
 ## 0.2.0
 

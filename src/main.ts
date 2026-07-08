@@ -53,7 +53,7 @@ export default class PropertyValuesBrowserPlugin extends Plugin {
       (leaf) => new PropertyValuesBrowserView(leaf, this)
     );
 
-    this.addRibbonIcon("list-tree", "Open Property Values Browser", () => {
+    this.addRibbonIcon("list-tree", "Open browser", () => {
       void this.activateView();
     });
 
@@ -400,8 +400,7 @@ class PropertyValuesBrowserView extends ItemView {
     if (!searchLeaf) {
       searchLeaf = this.app.workspace.getRightLeaf(false);
       if (!searchLeaf) {
-        await navigator.clipboard.writeText(query);
-        new Notice(`Search query copied: ${query}`);
+        new Notice(`Could not open Search for: ${query}`);
         return;
       }
       await searchLeaf.setViewState({ type: "search", active: true });
@@ -412,8 +411,7 @@ class PropertyValuesBrowserView extends ItemView {
       searchView.setQuery(query);
       await this.app.workspace.revealLeaf(searchLeaf);
     } else {
-      await navigator.clipboard.writeText(query);
-      new Notice(`Search query copied: ${query}`);
+      new Notice(`Could not set Search query: ${query}`);
     }
   }
 }
@@ -586,9 +584,8 @@ function removeValueFromProperty(rawValue: unknown, valueToDelete: string): {
 
 function addFileFrontmatter(properties: Map<string, PropertyStats>, file: TFile, app: App) {
   const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-  if (!frontmatter) return;
 
-  for (const [name, rawValue] of Object.entries(frontmatter as Frontmatter)) {
+  for (const [name, rawValue] of getFrontmatterEntries(frontmatter)) {
     if (name === "position") continue;
 
     const property = getOrCreateProperty(properties, name);
@@ -644,6 +641,18 @@ function getValueLabel(value: string) {
 
 function hasProperty(frontmatter: object, propertyName: string): frontmatter is Frontmatter {
   return Object.prototype.hasOwnProperty.call(frontmatter, propertyName);
+}
+
+function getFrontmatterEntries(frontmatter: unknown): Array<[string, unknown]> {
+  if (!isRecord(frontmatter)) {
+    return [];
+  }
+
+  return Object.keys(frontmatter).map((key) => [key, frontmatter[key]]);
+}
+
+function isRecord(value: unknown): value is Frontmatter {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getPropertyIcon(app: App, propertyName: string) {
