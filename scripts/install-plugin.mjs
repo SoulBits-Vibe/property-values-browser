@@ -2,7 +2,11 @@ import { copyFile, mkdir } from "fs/promises";
 import path from "path";
 
 const sourceRoot = process.cwd();
-const targetRoot = "C:\\Obsidian-Vaults\\.obsidian\\plugins\\property-values-browser";
+const targetRoot = process.env.OBSIDIAN_PLUGIN_DIR;
+
+if (!targetRoot) {
+  throw new Error("Set OBSIDIAN_PLUGIN_DIR to your vault plugin folder before running install-plugin.");
+}
 
 await mkdir(targetRoot, { recursive: true });
 

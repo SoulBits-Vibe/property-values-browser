@@ -75,6 +75,17 @@
   text-decoration: underline;
 }
 
+.property-values-browser__modal-warning {
+  color: var(--text-muted);
+}
+
+.property-values-browser__modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-4);
+}
+
 .property-values-browser__chevron {
   color: var(--nav-collapse-icon-color);
   display: flex;

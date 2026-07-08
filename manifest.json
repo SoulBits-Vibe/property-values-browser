@@ -1,9 +1,9 @@
 {
   "id": "property-values-browser",
   "name": "Property Values Browser",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.4.0",
-  "description": "Browse all frontmatter properties and their distinct values with counts. Click a value to search for notes with that property value.",
+  "description": "Browse frontmatter properties and values with counts, search shortcuts, and delete actions.",
   "author": "destiny911",
   "authorUrl": "https://github.com/SoulBits-Vibe",
   "isDesktopOnly": false

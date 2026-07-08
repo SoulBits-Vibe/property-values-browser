@@ -1,6 +1,9 @@
 import {
   App,
+  ButtonComponent,
   ItemView,
+  Menu,
+  Modal,
   Notice,
   Plugin,
   TFile,
@@ -250,6 +253,11 @@ class PropertyValuesBrowserView extends ItemView {
       await this.openSearch(property.name);
     });
 
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      this.showPropertyMenu(event, property);
+    });
+
     row.addEventListener("click", () => {
       if (property.forceExpanded) return;
 
@@ -266,6 +274,45 @@ class PropertyValuesBrowserView extends ItemView {
     for (const [value, count] of property.matchedValues) {
       this.renderValue(property.name, value, count);
     }
+  }
+
+  private showPropertyMenu(event: MouseEvent, property: VisibleProperty) {
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setTitle("Delete property")
+        .setIcon("trash")
+        .setWarning(true)
+        .onClick(() => {
+          new DeletePropertyModal(this.app, property.name, property.count, async () => {
+            await this.deleteProperty(property.name);
+          }).open();
+        });
+    });
+    menu.showAtMouseEvent(event);
+  }
+
+  private async deleteProperty(propertyName: string) {
+    const files = getFilesWithProperty(this.app, propertyName);
+    if (files.length === 0) {
+      new Notice(`No notes found with ${propertyName}.`);
+      this.rebuildAndRender();
+      return;
+    }
+
+    let deletedCount = 0;
+    for (const file of files) {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        if (Object.prototype.hasOwnProperty.call(frontmatter, propertyName)) {
+          delete frontmatter[propertyName];
+          deletedCount += 1;
+        }
+      });
+    }
+
+    this.expanded.delete(propertyName);
+    this.rebuildAndRender();
+    new Notice(`Deleted ${propertyName} from ${deletedCount} ${deletedCount === 1 ? "note" : "notes"}.`);
   }
 
   private renderValue(propertyName: string, value: string, count: number) {
@@ -286,10 +333,60 @@ class PropertyValuesBrowserView extends ItemView {
       text: String(count)
     });
 
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      this.showValueMenu(event, propertyName, value, label, count);
+    });
+
     row.addEventListener("click", async (event) => {
       event.stopPropagation();
       await this.openSearch(propertyName, value);
     });
+  }
+
+  private showValueMenu(event: MouseEvent, propertyName: string, value: string, label: string, count: number) {
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setTitle("Delete value")
+        .setIcon("trash")
+        .setWarning(true)
+        .onClick(() => {
+          new DeleteValueModal(this.app, propertyName, label, count, async () => {
+            await this.deleteValue(propertyName, value, label);
+          }).open();
+        });
+    });
+    menu.showAtMouseEvent(event);
+  }
+
+  private async deleteValue(propertyName: string, value: string, label: string) {
+    const files = getFilesWithPropertyValue(this.app, propertyName, value);
+    if (files.length === 0) {
+      new Notice(`No notes found with ${propertyName}: ${label}.`);
+      this.rebuildAndRender();
+      return;
+    }
+
+    let deletedCount = 0;
+    for (const file of files) {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        if (!Object.prototype.hasOwnProperty.call(frontmatter, propertyName)) return;
+
+        const result = removeValueFromProperty(frontmatter[propertyName], value);
+        if (!result.changed) return;
+
+        if (result.shouldDeleteProperty) {
+          delete frontmatter[propertyName];
+        } else {
+          frontmatter[propertyName] = result.value;
+        }
+        deletedCount += 1;
+      });
+    }
+
+    this.rebuildAndRender();
+    new Notice(`Deleted ${label} from ${deletedCount} ${deletedCount === 1 ? "note" : "notes"}.`);
   }
 
   private async openSearch(propertyName: string, value?: string) {
@@ -319,6 +416,86 @@ class PropertyValuesBrowserView extends ItemView {
   }
 }
 
+class DeletePropertyModal extends Modal {
+  private readonly propertyName: string;
+  private readonly noteCount: number;
+  private readonly onConfirm: () => Promise<void>;
+
+  constructor(app: App, propertyName: string, noteCount: number, onConfirm: () => Promise<void>) {
+    super(app);
+    this.propertyName = propertyName;
+    this.noteCount = noteCount;
+    this.onConfirm = onConfirm;
+  }
+
+  onOpen() {
+    this.setTitle("Delete property");
+    this.contentEl.empty();
+
+    this.contentEl.createEl("p", {
+      text: `Delete property "${this.propertyName}"?`
+    });
+    this.contentEl.createEl("p", {
+      cls: "property-values-browser__modal-warning",
+      text: `This removes the property from ${this.noteCount} ${this.noteCount === 1 ? "note" : "notes"}. Note contents are not deleted.`
+    });
+
+    const buttonRow = this.contentEl.createDiv("property-values-browser__modal-buttons");
+    new ButtonComponent(buttonRow)
+      .setButtonText("Cancel")
+      .onClick(() => this.close());
+
+    new ButtonComponent(buttonRow)
+      .setButtonText("Delete property")
+      .setWarning()
+      .onClick(async () => {
+        this.close();
+        await this.onConfirm();
+      });
+  }
+}
+
+class DeleteValueModal extends Modal {
+  private readonly propertyName: string;
+  private readonly valueLabel: string;
+  private readonly noteCount: number;
+  private readonly onConfirm: () => Promise<void>;
+
+  constructor(app: App, propertyName: string, valueLabel: string, noteCount: number, onConfirm: () => Promise<void>) {
+    super(app);
+    this.propertyName = propertyName;
+    this.valueLabel = valueLabel;
+    this.noteCount = noteCount;
+    this.onConfirm = onConfirm;
+  }
+
+  onOpen() {
+    this.setTitle("Delete value");
+    this.contentEl.empty();
+
+    this.contentEl.createEl("p", {
+      text: `Delete value "${this.valueLabel}" from "${this.propertyName}"?`
+    });
+    this.contentEl.createEl("p", {
+      cls: "property-values-browser__modal-warning",
+      text: `This removes the value from ${this.noteCount} ${this.noteCount === 1 ? "note" : "notes"}. If it is the only value, the property is removed from that note.`
+    });
+
+    const buttonRow = this.contentEl.createDiv("property-values-browser__modal-buttons");
+    new ButtonComponent(buttonRow)
+      .setButtonText("Cancel")
+      .onClick(() => this.close());
+
+    new ButtonComponent(buttonRow)
+      .setButtonText("Delete value")
+      .setWarning()
+      .onClick(async () => {
+        this.close();
+        await this.onConfirm();
+      });
+  }
+}
+
 function collectPropertyStats(app: App): RenderedProperty[] {
   const properties = new Map<string, PropertyStats>();
 
@@ -334,6 +511,75 @@ function collectPropertyStats(app: App): RenderedProperty[] {
       values: Array.from(property.values.entries()).sort(sortValueEntries)
     }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function getFilesWithProperty(app: App, propertyName: string): TFile[] {
+  return app.vault.getMarkdownFiles().filter((file) => {
+    const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
+    return !!frontmatter && Object.prototype.hasOwnProperty.call(frontmatter, propertyName);
+  });
+}
+
+function getFilesWithPropertyValue(app: App, propertyName: string, value: string): TFile[] {
+  return app.vault.getMarkdownFiles().filter((file) => {
+    const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!frontmatter || !Object.prototype.hasOwnProperty.call(frontmatter, propertyName)) {
+      return false;
+    }
+
+    return normalizeValues(frontmatter[propertyName]).includes(value);
+  });
+}
+
+function removeValueFromProperty(rawValue: unknown, valueToDelete: string): {
+  changed: boolean;
+  shouldDeleteProperty: boolean;
+  value?: unknown;
+} {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return {
+      changed: valueToDelete === EMPTY_VALUE,
+      shouldDeleteProperty: valueToDelete === EMPTY_VALUE
+    };
+  }
+
+  if (!Array.isArray(rawValue)) {
+    return {
+      changed: String(rawValue) === valueToDelete,
+      shouldDeleteProperty: String(rawValue) === valueToDelete
+    };
+  }
+
+  if (rawValue.length === 0) {
+    return {
+      changed: valueToDelete === EMPTY_VALUE,
+      shouldDeleteProperty: valueToDelete === EMPTY_VALUE
+    };
+  }
+
+  let changed = false;
+  const nextValue: unknown[] = [];
+  for (const item of rawValue) {
+    if (Array.isArray(item)) {
+      const result = removeValueFromProperty(item, valueToDelete);
+      if (result.changed) {
+        changed = true;
+      }
+      if (!result.shouldDeleteProperty) {
+        nextValue.push(result.value);
+      }
+    } else if (normalizeValues(item).includes(valueToDelete)) {
+      changed = true;
+    } else {
+      nextValue.push(item);
+    }
+  }
+
+  return {
+    changed,
+    shouldDeleteProperty: changed && nextValue.length === 0,
+    value: nextValue
+  };
 }
 
 function addFileFrontmatter(properties: Map<string, PropertyStats>, file: TFile, app: App) {
