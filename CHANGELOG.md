@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Add a right-click rename action for property values.
+- Renaming into an existing value merges them, including de-duplicating lists, after a confirmation that shows how many notes will change.
+
 ## 0.2.2
 
 - Remove clipboard fallback behavior.

@@ -350,6 +350,16 @@ class PropertyValuesBrowserView extends ItemView {
     const menu = new Menu();
     menu.addItem((item) => {
       item
+        .setTitle("Rename value")
+        .setIcon("pencil")
+        .onClick(() => {
+          new RenameValueModal(this.app, propertyName, value, label, async (newValue) => {
+            await this.renameValue(propertyName, value, label, newValue);
+          }).open();
+        });
+    });
+    menu.addItem((item) => {
+      item
         .setTitle("Delete value")
         .setIcon("trash")
         .setWarning(true)
@@ -389,6 +399,31 @@ class PropertyValuesBrowserView extends ItemView {
 
     this.rebuildAndRender();
     new Notice(`Deleted ${label} from ${deletedCount} ${deletedCount === 1 ? "note" : "notes"}.`);
+  }
+
+  private async renameValue(propertyName: string, value: string, label: string, newValue: string) {
+    const files = getFilesWithPropertyValue(this.app, propertyName, value);
+    if (files.length === 0) {
+      new Notice(`No notes found with ${propertyName}: ${label}.`);
+      this.rebuildAndRender();
+      return;
+    }
+
+    let renamedCount = 0;
+    for (const file of files) {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
+        if (!hasProperty(frontmatter, propertyName)) return;
+
+        const result = renameValueInProperty(frontmatter[propertyName], value, newValue);
+        if (!result.changed) return;
+
+        frontmatter[propertyName] = result.value;
+        renamedCount += 1;
+      });
+    }
+
+    this.rebuildAndRender();
+    new Notice(`Renamed ${label} to ${newValue} in ${renamedCount} ${renamedCount === 1 ? "note" : "notes"}.`);
   }
 
   private async openSearch(propertyName: string, value?: string) {
@@ -496,6 +531,131 @@ class DeleteValueModal extends Modal {
   }
 }
 
+class RenameValueModal extends Modal {
+  private readonly propertyName: string;
+  private readonly currentValue: string;
+  private readonly currentLabel: string;
+  private readonly onConfirm: (newValue: string) => Promise<void>;
+  private inputEl!: HTMLInputElement;
+  private statusEl!: HTMLParagraphElement;
+  private renameButton!: ButtonComponent;
+
+  constructor(
+    app: App,
+    propertyName: string,
+    currentValue: string,
+    currentLabel: string,
+    onConfirm: (newValue: string) => Promise<void>
+  ) {
+    super(app);
+    this.propertyName = propertyName;
+    this.currentValue = currentValue;
+    this.currentLabel = currentLabel;
+    this.onConfirm = onConfirm;
+  }
+
+  onOpen() {
+    this.setTitle("Rename value");
+    this.contentEl.empty();
+
+    this.contentEl.createEl("p", {
+      text: `Rename value "${this.currentLabel}" in "${this.propertyName}"?`
+    });
+
+    this.inputEl = this.contentEl.createEl("input", {
+      cls: "property-values-browser__rename-input",
+      attr: {
+        type: "text",
+        placeholder: "New value",
+        "aria-label": "New value"
+      }
+    });
+    this.inputEl.value = this.currentValue === EMPTY_VALUE ? "" : this.currentValue;
+
+    this.statusEl = this.contentEl.createEl("p", {
+      cls: "property-values-browser__modal-warning"
+    });
+
+    const buttonRow = this.contentEl.createDiv("property-values-browser__modal-buttons");
+    new ButtonComponent(buttonRow)
+      .setButtonText("Cancel")
+      .onClick(() => this.close());
+
+    this.renameButton = new ButtonComponent(buttonRow)
+      .setButtonText("Rename")
+      .setCta()
+      .onClick(() => {
+        void this.submit();
+      });
+
+    this.inputEl.addEventListener("input", () => this.updateStatus());
+    this.inputEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void this.submit();
+      }
+    });
+
+    this.updateStatus();
+    window.setTimeout(() => {
+      this.inputEl.focus();
+      this.inputEl.select();
+    }, 0);
+  }
+
+  private getTrimmedValue() {
+    return this.inputEl.value.trim();
+  }
+
+  private isUnchanged(newValue: string) {
+    if (newValue === "") {
+      return true;
+    }
+
+    return this.currentValue !== EMPTY_VALUE && newValue === this.currentValue;
+  }
+
+  private updateStatus() {
+    const newValue = this.getTrimmedValue();
+    if (newValue === "") {
+      this.statusEl.setText("Enter a new value.");
+      this.renameButton.setDisabled(true);
+      return;
+    }
+
+    if (this.isUnchanged(newValue)) {
+      this.statusEl.setText("Enter a different value.");
+      this.renameButton.setDisabled(true);
+      return;
+    }
+
+    const sourceCount = getFilesWithPropertyValue(this.app, this.propertyName, this.currentValue).length;
+    const targetCount = getFilesWithPropertyValue(this.app, this.propertyName, newValue).length;
+    const sourceLabel = sourceCount === 1 ? "note" : "notes";
+
+    if (targetCount > 0) {
+      const targetLabel = targetCount === 1 ? "note" : "notes";
+      this.statusEl.setText(
+        `"${newValue}" already exists in ${targetCount} ${targetLabel}. This will merge them and update ${sourceCount} ${sourceLabel}. Lists that already have both will keep a single "${newValue}".`
+      );
+    } else {
+      this.statusEl.setText(`This changes the value in ${sourceCount} ${sourceLabel}.`);
+    }
+
+    this.renameButton.setDisabled(false);
+  }
+
+  private async submit() {
+    const newValue = this.getTrimmedValue();
+    if (this.isUnchanged(newValue)) {
+      return;
+    }
+
+    this.close();
+    await this.onConfirm(newValue);
+  }
+}
+
 function collectPropertyStats(app: App): RenderedProperty[] {
   const properties = new Map<string, PropertyStats>();
 
@@ -578,6 +738,73 @@ function removeValueFromProperty(rawValue: unknown, valueToDelete: string): {
   return {
     changed,
     shouldDeleteProperty: changed && nextValue.length === 0,
+    value: nextValue
+  };
+}
+
+function renameValueInProperty(rawValue: unknown, valueToRename: string, newValue: string): {
+  changed: boolean;
+  value: unknown;
+} {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    if (valueToRename !== EMPTY_VALUE) {
+      return { changed: false, value: rawValue };
+    }
+
+    return { changed: true, value: newValue };
+  }
+
+  if (!Array.isArray(rawValue)) {
+    if (String(rawValue) !== valueToRename) {
+      return { changed: false, value: rawValue };
+    }
+
+    return { changed: true, value: newValue };
+  }
+
+  if (rawValue.length === 0) {
+    if (valueToRename !== EMPTY_VALUE) {
+      return { changed: false, value: rawValue };
+    }
+
+    return { changed: true, value: [newValue] };
+  }
+
+  let changed = false;
+  let alreadyHasNewValue = false;
+  let insertIndex: number | null = null;
+  const nextValue: unknown[] = [];
+
+  for (const item of rawValue) {
+    if (Array.isArray(item)) {
+      const result = renameValueInProperty(item, valueToRename, newValue);
+      if (result.changed) {
+        changed = true;
+      }
+      nextValue.push(result.value);
+    } else if (normalizeValues(item).includes(valueToRename)) {
+      changed = true;
+      if (insertIndex === null) {
+        insertIndex = nextValue.length;
+      }
+    } else {
+      if (normalizeValues(item).includes(newValue)) {
+        alreadyHasNewValue = true;
+      }
+      nextValue.push(item);
+    }
+  }
+
+  if (!changed) {
+    return { changed: false, value: rawValue };
+  }
+
+  if (!alreadyHasNewValue && insertIndex !== null) {
+    nextValue.splice(insertIndex, 0, newValue);
+  }
+
+  return {
+    changed: true,
     value: nextValue
   };
 }

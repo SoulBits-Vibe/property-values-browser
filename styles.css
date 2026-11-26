@@ -75,8 +75,14 @@
   text-decoration: underline;
 }
 
+.property-values-browser__rename-input {
+  width: 100%;
+  margin-top: var(--size-4-2);
+}
+
 .property-values-browser__modal-warning {
   color: var(--text-muted);
+  margin-top: var(--size-4-2);
 }
 
 .property-values-browser__modal-buttons {
