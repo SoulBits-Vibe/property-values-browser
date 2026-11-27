@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- Fix a typings issue that made the community review linter flag Object.entries.
+
 ## 0.3.1
 
 - Clean up TypeScript typings for the community review linter.

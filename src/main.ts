@@ -888,8 +888,8 @@ function renamePropertyKey(frontmatter: Frontmatter, oldName: string, newName: s
   for (const key of Object.keys(frontmatter)) {
     delete frontmatter[key];
   }
-  for (const [key, value] of Object.entries(next)) {
-    frontmatter[key] = value;
+  for (const key of Object.keys(next)) {
+    frontmatter[key] = next[key];
   }
 
   return true;
@@ -1158,9 +1158,11 @@ function toPropertyString(value: unknown): string {
     case "string":
       return value;
     case "number":
+      return value.toString();
     case "boolean":
-    case "bigint":
+      return value.toString();
     case "symbol":
+      return value.toString();
     case "function":
       return value.toString();
     case "object":
