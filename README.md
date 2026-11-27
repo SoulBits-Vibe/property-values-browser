@@ -5,7 +5,7 @@
 
 Property Values Browser is a small Obsidian plugin that adds a right-sidebar view for browsing frontmatter properties by value.
 
-It is meant to feel like Obsidian's built-in All Properties panel, with one extra action: expand a property to see the distinct values used across the vault. Clicking a value opens Obsidian Search for that exact property/value pair, and right-click menus can rename values or delete properties and values from notes.
+It is meant to feel like Obsidian's built-in All Properties panel, with one extra action: expand a property to see the distinct values used across the vault. Clicking a value opens Obsidian Search for that exact property/value pair, and right-click menus can rename or delete properties and values from notes.
 
 ![Property Values Browser in Obsidian](docs/property-values-browser-screenshot.jpg)
 
@@ -18,9 +18,9 @@ It is meant to feel like Obsidian's built-in All Properties panel, with one extr
 - Filters property names and values from the top input.
 - Clicks property counts to search for every note with that property.
 - Clicks value rows to search for notes with that exact property/value pair.
-- Right-clicks property rows to delete that property from matching notes.
+- Right-clicks property rows to rename that property in matching notes, or delete it.
 - Right-clicks value rows to rename that value in matching notes, or delete it.
-- Renaming into an existing value merges them, de-duplicating lists, after confirmation.
+- Renaming into an existing property or value merges them, de-duplicating lists, after confirmation.
 - Adds a ribbon icon and command palette command.
 - Includes a manual refresh button.
 

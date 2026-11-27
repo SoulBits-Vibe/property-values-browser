@@ -284,6 +284,16 @@ class PropertyValuesBrowserView extends ItemView {
     menu.setUseNativeMenu(false);
     menu.addItem((item) => {
       item
+        .setTitle("Rename property")
+        .setIcon("pencil")
+        .onClick(() => {
+          new RenamePropertyModal(this.app, property.name, async (newName) => {
+            await this.renameProperty(property.name, newName);
+          }).open();
+        });
+    });
+    menu.addItem((item) => {
+      item
         .setTitle("Delete property")
         .setIcon("trash")
         .setWarning(true)
@@ -317,6 +327,32 @@ class PropertyValuesBrowserView extends ItemView {
     this.expanded.delete(propertyName);
     this.rebuildAndRender();
     new Notice(`Deleted ${propertyName} from ${deletedCount} ${deletedCount === 1 ? "note" : "notes"}.`);
+  }
+
+  private async renameProperty(propertyName: string, newName: string) {
+    const files = getFilesWithProperty(this.app, propertyName);
+    if (files.length === 0) {
+      new Notice(`No notes found with ${propertyName}.`);
+      this.rebuildAndRender();
+      return;
+    }
+
+    let renamedCount = 0;
+    for (const file of files) {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
+        if (renamePropertyKey(frontmatter, propertyName, newName)) {
+          renamedCount += 1;
+        }
+      });
+    }
+
+    if (this.expanded.has(propertyName)) {
+      this.expanded.delete(propertyName);
+      this.expanded.add(newName);
+    }
+
+    this.rebuildAndRender();
+    new Notice(`Renamed ${propertyName} to ${newName} in ${renamedCount} ${renamedCount === 1 ? "note" : "notes"}.`);
   }
 
   private renderValue(propertyName: string, value: string, count: number) {
@@ -689,6 +725,117 @@ class RenameValueModal extends Modal {
   }
 }
 
+class RenamePropertyModal extends Modal {
+  private readonly propertyName: string;
+  private readonly onConfirm: (newName: string) => Promise<void>;
+  private inputEl!: HTMLInputElement;
+  private statusEl!: HTMLParagraphElement;
+  private renameButton!: ButtonComponent;
+
+  constructor(app: App, propertyName: string, onConfirm: (newName: string) => Promise<void>) {
+    super(app);
+    this.propertyName = propertyName;
+    this.onConfirm = onConfirm;
+  }
+
+  onOpen() {
+    this.setTitle("Rename property");
+    this.contentEl.empty();
+
+    this.contentEl.createEl("p", {
+      text: `Rename property "${this.propertyName}"?`
+    });
+
+    this.inputEl = this.contentEl.createEl("input", {
+      cls: "property-values-browser__rename-input",
+      attr: {
+        type: "text",
+        placeholder: "New property name",
+        "aria-label": "New property name"
+      }
+    });
+    this.inputEl.value = this.propertyName;
+
+    this.statusEl = this.contentEl.createEl("p", {
+      cls: "property-values-browser__modal-warning"
+    });
+
+    const buttonRow = this.contentEl.createDiv("property-values-browser__modal-buttons");
+    new ButtonComponent(buttonRow)
+      .setButtonText("Cancel")
+      .onClick(() => this.close());
+
+    this.renameButton = new ButtonComponent(buttonRow)
+      .setButtonText("Rename")
+      .setCta()
+      .onClick(() => {
+        void this.submit();
+      });
+
+    this.inputEl.addEventListener("input", () => this.updateStatus());
+    this.inputEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void this.submit();
+      }
+    });
+
+    this.updateStatus();
+    window.setTimeout(() => {
+      this.inputEl.focus();
+      this.inputEl.select();
+    }, 0);
+  }
+
+  private getTrimmedName() {
+    return this.inputEl.value.trim();
+  }
+
+  private isUnchanged(newName: string) {
+    return newName === "" || newName === this.propertyName;
+  }
+
+  private updateStatus() {
+    const newName = this.getTrimmedName();
+    if (newName === "") {
+      this.statusEl.setText("Enter a new property name.");
+      this.renameButton.setDisabled(true);
+      return;
+    }
+
+    if (this.isUnchanged(newName)) {
+      this.statusEl.setText("Enter a different property name.");
+      this.renameButton.setDisabled(true);
+      return;
+    }
+
+    const sourceCount = getFilesWithProperty(this.app, this.propertyName).length;
+    const targetCount = getFilesWithProperty(this.app, newName).length;
+    const sourceLabel = sourceCount === 1 ? "note" : "notes";
+
+    if (targetCount > 0) {
+      const targetLabel = targetCount === 1 ? "note" : "notes";
+      this.statusEl.setText(
+        `"${newName}" already exists in ${targetCount} ${targetLabel}. This will merge them and update ${sourceCount} ${sourceLabel}. Notes that already have both keys will keep one combined, de-duplicated list.`
+      );
+    } else {
+      this.statusEl.setText(`This changes the property name in ${sourceCount} ${sourceLabel}.`);
+    }
+
+    this.renameButton.setDisabled(false);
+  }
+
+  private async submit() {
+    const newName = this.getTrimmedName();
+    if (this.isUnchanged(newName)) {
+      return;
+    }
+
+    this.close();
+    await this.onConfirm(newName);
+  }
+}
+
 function collectPropertyStats(app: App): RenderedProperty[] {
   const properties = new Map<string, PropertyStats>();
 
@@ -711,6 +858,104 @@ function getFilesWithProperty(app: App, propertyName: string): TFile[] {
     const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
     return !!frontmatter && hasProperty(frontmatter, propertyName);
   });
+}
+
+function renamePropertyKey(frontmatter: Frontmatter, oldName: string, newName: string) {
+  if (!hasProperty(frontmatter, oldName) || oldName === newName) {
+    return false;
+  }
+
+  const sourceValue = frontmatter[oldName];
+  const mergedValue = hasProperty(frontmatter, newName)
+    ? mergePropertyValues(frontmatter[newName], sourceValue)
+    : sourceValue;
+
+  const next: Frontmatter = {};
+  let wroteNew = false;
+  for (const key of Object.keys(frontmatter)) {
+    if (key === oldName || key === newName) {
+      if (!wroteNew) {
+        next[newName] = mergedValue;
+        wroteNew = true;
+      }
+      continue;
+    }
+
+    next[key] = frontmatter[key];
+  }
+
+  if (!wroteNew) {
+    next[newName] = mergedValue;
+  }
+
+  for (const key of Object.keys(frontmatter)) {
+    delete frontmatter[key];
+  }
+  for (const [key, value] of Object.entries(next)) {
+    frontmatter[key] = value;
+  }
+
+  return true;
+}
+
+function mergePropertyValues(targetValue: unknown, sourceValue: unknown) {
+  const targetItems = propertyValueItems(targetValue);
+  const sourceItems = propertyValueItems(sourceValue);
+  const targetWasList = Array.isArray(targetValue) && targetValue.length > 0;
+  const sourceWasList = Array.isArray(sourceValue) && sourceValue.length > 0;
+
+  const merged: unknown[] = [];
+  const seen = new Set<string>();
+  for (const item of [...targetItems, ...sourceItems]) {
+    const key = propertyValueItemKey(item);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(item);
+  }
+
+  if (merged.length === 0) {
+    return "";
+  }
+
+  if (merged.length === 1 && !targetWasList && !sourceWasList) {
+    return merged[0];
+  }
+
+  return merged;
+}
+
+function propertyValueItems(value: unknown): unknown[] {
+  if (isEmptyPropertyValue(value)) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter((item) => !isEmptyPropertyValue(item));
+  }
+
+  return [value];
+}
+
+function propertyValueItemKey(item: unknown) {
+  if (Array.isArray(item)) {
+    return JSON.stringify(item);
+  }
+
+  if (item === null || item === undefined || item === "") {
+    return EMPTY_VALUE;
+  }
+
+  return String(item);
+}
+
+function isEmptyPropertyValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return true;
+  }
+
+  return Array.isArray(value) && value.length === 0;
 }
 
 function getFilesWithPropertyValue(app: App, propertyName: string, value: string): TFile[] {
