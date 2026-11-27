@@ -430,6 +430,11 @@ class PropertyValuesBrowserView extends ItemView {
     const query = value === undefined
       ? buildPropertyExistsSearchQuery(propertyName)
       : buildPropertySearchQuery(propertyName, value);
+
+    if (openGlobalSearch(this.app, query)) {
+      return;
+    }
+
     let searchLeaf: WorkspaceLeaf | null = this.app.workspace.getLeavesOfType("search")[0] ?? null;
 
     if (!searchLeaf) {
@@ -441,13 +446,21 @@ class PropertyValuesBrowserView extends ItemView {
       await searchLeaf.setViewState({ type: "search", active: true });
     }
 
-    const searchView = searchLeaf.view as { setQuery?: (query: string) => void };
+    if (typeof searchLeaf.loadIfDeferred === "function") {
+      await searchLeaf.loadIfDeferred();
+    }
+
+    const searchView = searchLeaf.view as { setQuery?: (query: string) => void; startSearch?: () => void };
     if (typeof searchView.setQuery === "function") {
       searchView.setQuery(query);
+      if (typeof searchView.startSearch === "function") {
+        searchView.startSearch();
+      }
       await this.app.workspace.revealLeaf(searchLeaf);
-    } else {
-      new Notice(`Could not set Search query: ${query}`);
+      return;
     }
+
+    new Notice(`Could not set Search query: ${query}`);
   }
 }
 
@@ -891,6 +904,28 @@ function getPropertyIcon(app: App, propertyName: string) {
     : null;
 
   return icon ?? "lucide-text";
+}
+
+function openGlobalSearch(app: App, query: string) {
+  const internalPlugins = (
+    app as App & {
+      internalPlugins?: {
+        getPluginById?: (id: string) => {
+          instance?: {
+            openGlobalSearch?: (query: string) => void;
+          };
+        };
+      };
+    }
+  ).internalPlugins;
+
+  const openSearch = internalPlugins?.getPluginById?.("global-search")?.instance?.openGlobalSearch;
+  if (typeof openSearch !== "function") {
+    return false;
+  }
+
+  openSearch(query);
+  return true;
 }
 
 function buildPropertyExistsSearchQuery(propertyName: string) {
