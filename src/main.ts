@@ -431,36 +431,52 @@ class PropertyValuesBrowserView extends ItemView {
       ? buildPropertyExistsSearchQuery(propertyName)
       : buildPropertySearchQuery(propertyName, value);
 
-    if (openGlobalSearch(this.app, query)) {
-      return;
-    }
-
-    let searchLeaf: WorkspaceLeaf | null = this.app.workspace.getLeavesOfType("search")[0] ?? null;
-
-    if (!searchLeaf) {
-      searchLeaf = this.app.workspace.getRightLeaf(false);
-      if (!searchLeaf) {
-        new Notice(`Could not open Search for: ${query}`);
+    try {
+      if (isGlobalSearchDisabled(this.app)) {
+        new Notice("Core Search plugin is disabled");
         return;
       }
-      await searchLeaf.setViewState({ type: "search", active: true });
-    }
 
-    if (typeof searchLeaf.loadIfDeferred === "function") {
-      await searchLeaf.loadIfDeferred();
+      const leaf = await this.revealSearchLeaf(query);
+      applySearchQuery(leaf, query);
+    } catch (error) {
+      const reason = error instanceof Error && error.message
+        ? error.message
+        : String(error);
+      new Notice(`Could not open Search: ${reason}`);
     }
+  }
 
-    const searchView = searchLeaf.view as { setQuery?: (query: string) => void; startSearch?: () => void };
-    if (typeof searchView.setQuery === "function") {
-      searchView.setQuery(query);
-      if (typeof searchView.startSearch === "function") {
-        searchView.startSearch();
+  private async revealSearchLeaf(query: string): Promise<WorkspaceLeaf> {
+    const workspace = this.app.workspace;
+
+    if (typeof workspace.ensureSideLeaf === "function") {
+      const leaf = await workspace.ensureSideLeaf("search", "left", {
+        active: true,
+        reveal: true,
+        state: { query }
+      });
+      await workspace.revealLeaf(leaf);
+      if (typeof leaf.loadIfDeferred === "function") {
+        await leaf.loadIfDeferred();
       }
-      await this.app.workspace.revealLeaf(searchLeaf);
-      return;
+      return leaf;
     }
 
-    new Notice(`Could not set Search query: ${query}`);
+    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType("search")[0] ?? null;
+    if (!leaf) {
+      leaf = workspace.getLeftLeaf(false);
+      if (!leaf) {
+        throw new Error("Could not open the Search sidebar");
+      }
+      await leaf.setViewState({ type: "search", active: true });
+    }
+
+    await workspace.revealLeaf(leaf);
+    if (typeof leaf.loadIfDeferred === "function") {
+      await leaf.loadIfDeferred();
+    }
+    return leaf;
   }
 }
 
@@ -906,26 +922,55 @@ function getPropertyIcon(app: App, propertyName: string) {
   return icon ?? "lucide-text";
 }
 
-function openGlobalSearch(app: App, query: string) {
-  const internalPlugins = (
-    app as App & {
-      internalPlugins?: {
-        getPluginById?: (id: string) => {
-          instance?: {
-            openGlobalSearch?: (query: string) => void;
-          };
-        };
-      };
-    }
-  ).internalPlugins;
+interface InternalPluginRef {
+  enabled?: boolean;
+  instance?: unknown;
+}
 
-  const openSearch = internalPlugins?.getPluginById?.("global-search")?.instance?.openGlobalSearch;
-  if (typeof openSearch !== "function") {
+interface InternalPluginsRef {
+  getPluginById?: (id: string) => InternalPluginRef | null;
+  getEnabledPluginById?: (id: string) => unknown;
+}
+
+function getInternalPlugins(app: App): InternalPluginsRef | undefined {
+  return (app as App & { internalPlugins?: InternalPluginsRef }).internalPlugins;
+}
+
+function isGlobalSearchDisabled(app: App) {
+  const plugins = getInternalPlugins(app);
+  if (!plugins) {
     return false;
   }
 
-  openSearch(query);
-  return true;
+  if (typeof plugins.getEnabledPluginById === "function") {
+    return !plugins.getEnabledPluginById("global-search");
+  }
+
+  const wrapper = plugins.getPluginById?.("global-search");
+  return !!wrapper && wrapper.enabled === false;
+}
+
+function applySearchQuery(leaf: WorkspaceLeaf, query: string) {
+  const view = leaf.view as {
+    setQuery?: (query: string) => void;
+    startSearch?: () => void;
+    searchComponent?: { setValue?: (query: string) => void };
+  };
+
+  if (typeof view.setQuery === "function") {
+    view.setQuery(query);
+    return;
+  }
+
+  if (typeof view.searchComponent?.setValue === "function") {
+    view.searchComponent.setValue(query);
+    if (typeof view.startSearch === "function") {
+      view.startSearch();
+    }
+    return;
+  }
+
+  throw new Error("Could not set the Search query");
 }
 
 function buildPropertyExistsSearchQuery(propertyName: string) {

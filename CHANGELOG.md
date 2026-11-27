@@ -5,6 +5,7 @@
 - Add a right-click rename action for property values.
 - Renaming into an existing value merges them, including de-duplicating lists, after a confirmation that shows how many notes will change.
 - Fix clicking a property or value so Search opens even when the Search tab was deferred or not fully loaded.
+- Always reveal the Search sidebar when clicking a property or value, and show an error if Search cannot be opened.
 
 ## 0.2.2
 
