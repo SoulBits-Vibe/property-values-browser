@@ -257,6 +257,7 @@ class PropertyValuesBrowserView extends ItemView {
 
     row.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       this.showPropertyMenu(event, property);
     });
 
@@ -280,6 +281,7 @@ class PropertyValuesBrowserView extends ItemView {
 
   private showPropertyMenu(event: MouseEvent, property: VisibleProperty) {
     const menu = new Menu();
+    menu.setUseNativeMenu(false);
     menu.addItem((item) => {
       item
         .setTitle("Delete property")
@@ -337,6 +339,7 @@ class PropertyValuesBrowserView extends ItemView {
 
     row.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       this.showValueMenu(event, propertyName, value, label, count);
     });
 
@@ -348,6 +351,7 @@ class PropertyValuesBrowserView extends ItemView {
 
   private showValueMenu(event: MouseEvent, propertyName: string, value: string, label: string, count: number) {
     const menu = new Menu();
+    menu.setUseNativeMenu(false);
     menu.addItem((item) => {
       item
         .setTitle("Rename value")
