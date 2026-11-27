@@ -33,3 +33,4 @@ Then reload Obsidian and enable **Property Values Browser** in Community plugins
 
 - Rename and delete actions update frontmatter in matching notes after confirmation, but the plugin does not provide its own undo history.
 - The list is based on Obsidian's metadata cache, so very recent file changes may need a refresh.
+- To build those counts, the plugin reads all markdown files in the vault. It does not send them anywhere.

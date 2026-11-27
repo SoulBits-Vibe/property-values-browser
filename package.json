@@ -1,13 +1,14 @@
 {
   "name": "property-values-browser",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Browse Obsidian frontmatter properties and their distinct values with counts.",
   "main": "main.js",
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "install-plugin": "node scripts/install-plugin.mjs",
-    "make-release": "node scripts/make-release.mjs"
+    "make-release": "node scripts/make-release.mjs",
+    "lint": "eslint ."
   },
   "keywords": [
     "obsidian",
@@ -20,7 +21,12 @@
   "devDependencies": {
     "@types/node": "^20.11.30",
     "esbuild": "^0.21.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.6.0",
+    "globals": "^17.14.0",
+    "jiti": "^2.7.0",
     "obsidian": "^1.8.7",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.74.0"
   }
 }

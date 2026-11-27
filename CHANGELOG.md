@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Clean up TypeScript typings for the community review linter.
+- Document that the plugin reads markdown files in the vault to count property values.
+
 ## 0.3.0
 
 - Right-click to rename a property or a value across matching notes.

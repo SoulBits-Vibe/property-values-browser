@@ -479,11 +479,8 @@ class PropertyValuesBrowserView extends ItemView {
 
       const leaf = await this.revealSearchLeaf(query);
       applySearchQuery(leaf, query);
-    } catch (error) {
-      const reason = error instanceof Error && error.message
-        ? error.message
-        : String(error);
-      new Notice(`Could not open Search: ${reason}`);
+    } catch (error: unknown) {
+      new Notice(`Could not open Search: ${getErrorMessage(error)}`);
     }
   }
 
@@ -947,7 +944,7 @@ function propertyValueItemKey(item: unknown) {
     return EMPTY_VALUE;
   }
 
-  return String(item);
+  return toPropertyString(item);
 }
 
 function isEmptyPropertyValue(value: unknown) {
@@ -983,8 +980,8 @@ function removeValueFromProperty(rawValue: unknown, valueToDelete: string): {
 
   if (!Array.isArray(rawValue)) {
     return {
-      changed: String(rawValue) === valueToDelete,
-      shouldDeleteProperty: String(rawValue) === valueToDelete
+      changed: toPropertyString(rawValue) === valueToDelete,
+      shouldDeleteProperty: toPropertyString(rawValue) === valueToDelete
     };
   }
 
@@ -1033,7 +1030,7 @@ function renameValueInProperty(rawValue: unknown, valueToRename: string, newValu
   }
 
   if (!Array.isArray(rawValue)) {
-    if (String(rawValue) !== valueToRename) {
+    if (toPropertyString(rawValue) !== valueToRename) {
       return { changed: false, value: rawValue };
     }
 
@@ -1131,7 +1128,7 @@ function normalizeValues(value: unknown): string[] {
     }, []);
   }
 
-  return [String(value)];
+  return [toPropertyString(value)];
 }
 
 function sortValueEntries(a: [string, number], b: [string, number]) {
@@ -1145,7 +1142,55 @@ function getValueLabel(value: string) {
 }
 
 function hasProperty(frontmatter: object, propertyName: string): frontmatter is Frontmatter {
-  return Object.prototype.hasOwnProperty.call(frontmatter, propertyName);
+  return Object.prototype.hasOwnProperty.call(frontmatter, propertyName) === true;
+}
+
+function toPropertyString(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+
+  if (value === undefined) {
+    return "undefined";
+  }
+
+  switch (typeof value) {
+    case "string":
+      return value;
+    case "number":
+    case "boolean":
+    case "bigint":
+    case "symbol":
+    case "function":
+      return value.toString();
+    case "object":
+      if (value instanceof Date) {
+        return value.toString();
+      }
+      return objectTag(value);
+    default:
+      return "";
+  }
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function objectTag(value: object): string {
+  return asString(Object.prototype.toString.call(value)) ?? "[object Object]";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message !== "") {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error !== "") {
+    return error;
+  }
+
+  return "Unknown error";
 }
 
 function getFrontmatterEntries(frontmatter: unknown): Array<[string, unknown]> {
@@ -1161,7 +1206,7 @@ function isRecord(value: unknown): value is Frontmatter {
 }
 
 function getPropertyIcon(app: App, propertyName: string) {
-  const typeManager = (app as App & { metadataTypeManager?: MetadataTypeManager }).metadataTypeManager;
+  const typeManager = getMetadataTypeManager(app);
   const properties = typeManager?.getAllProperties?.();
   const propertyInfo = properties?.[propertyName.toLowerCase()];
   const icon = propertyInfo?.widget
@@ -1171,9 +1216,31 @@ function getPropertyIcon(app: App, propertyName: string) {
   return icon ?? "lucide-text";
 }
 
+function getUnknownProperty(value: object, key: string): unknown {
+  return (value as Record<string, unknown>)[key];
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+function isMetadataTypeManager(value: unknown): value is MetadataTypeManager {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  const getAllProperties = getUnknownProperty(value, "getAllProperties");
+  const getWidget = getUnknownProperty(value, "getWidget");
+  return typeof getAllProperties === "function" || typeof getWidget === "function";
+}
+
+function getMetadataTypeManager(app: App): MetadataTypeManager | undefined {
+  const manager = getUnknownProperty(app, "metadataTypeManager");
+  return isMetadataTypeManager(manager) ? manager : undefined;
+}
+
 interface InternalPluginRef {
   enabled?: boolean;
-  instance?: unknown;
 }
 
 interface InternalPluginsRef {
@@ -1181,8 +1248,31 @@ interface InternalPluginsRef {
   getEnabledPluginById?: (id: string) => unknown;
 }
 
+function isInternalPluginRef(value: unknown): value is InternalPluginRef {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  const enabled = getUnknownProperty(value, "enabled");
+  return enabled === undefined || typeof enabled === "boolean";
+}
+
+function isInternalPlugins(value: unknown): value is InternalPluginsRef {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  const getPluginById = getUnknownProperty(value, "getPluginById");
+  const getEnabledPluginById = getUnknownProperty(value, "getEnabledPluginById");
+  return (
+    (getPluginById === undefined || typeof getPluginById === "function")
+    && (getEnabledPluginById === undefined || typeof getEnabledPluginById === "function")
+  );
+}
+
 function getInternalPlugins(app: App): InternalPluginsRef | undefined {
-  return (app as App & { internalPlugins?: InternalPluginsRef }).internalPlugins;
+  const plugins = getUnknownProperty(app, "internalPlugins");
+  return isInternalPlugins(plugins) ? plugins : undefined;
 }
 
 function isGlobalSearchDisabled(app: App) {
@@ -1195,23 +1285,47 @@ function isGlobalSearchDisabled(app: App) {
     return !plugins.getEnabledPluginById("global-search");
   }
 
-  const wrapper = plugins.getPluginById?.("global-search");
-  return !!wrapper && wrapper.enabled === false;
+  if (typeof plugins.getPluginById !== "function") {
+    return false;
+  }
+
+  const wrapper = plugins.getPluginById("global-search");
+  return isInternalPluginRef(wrapper) && wrapper.enabled === false;
+}
+
+interface SearchQueryView {
+  setQuery: (query: string) => void;
+}
+
+interface SearchComponentView {
+  startSearch?: () => void;
+  searchComponent: {
+    setValue: (query: string) => void;
+  };
+}
+
+function hasSetQuery(view: object): view is SearchQueryView {
+  return typeof getUnknownProperty(view, "setQuery") === "function";
+}
+
+function hasSearchComponent(view: object): view is SearchComponentView {
+  const component = getUnknownProperty(view, "searchComponent");
+  if (!isObject(component)) {
+    return false;
+  }
+
+  return typeof getUnknownProperty(component, "setValue") === "function";
 }
 
 function applySearchQuery(leaf: WorkspaceLeaf, query: string) {
-  const view = leaf.view as {
-    setQuery?: (query: string) => void;
-    startSearch?: () => void;
-    searchComponent?: { setValue?: (query: string) => void };
-  };
+  const view: object = leaf.view;
 
-  if (typeof view.setQuery === "function") {
+  if (hasSetQuery(view)) {
     view.setQuery(query);
     return;
   }
 
-  if (typeof view.searchComponent?.setValue === "function") {
+  if (hasSearchComponent(view)) {
     view.searchComponent.setValue(query);
     if (typeof view.startSearch === "function") {
       view.startSearch();
