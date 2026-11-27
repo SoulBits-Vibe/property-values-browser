@@ -1,13 +1,10 @@
 # Changelog
 
-## 0.2.3
+## 0.3.0
 
-- Add a right-click rename action for property values.
-- Add a right-click rename action for property names.
-- Renaming into an existing value or property merges them, including de-duplicating lists, after a confirmation that shows how many notes will change.
-- Fix clicking a property or value so Search opens even when the Search tab was deferred or not fully loaded.
-- Always reveal the Search sidebar when clicking a property or value, and show an error if Search cannot be opened.
-- Keep value right-click menus from triggering Obsidian's note-title rename, so Rename value only updates frontmatter.
+- Right-click to rename a property or a value across matching notes.
+- Renaming into an existing property or value merges them, de-duplicating lists, after a confirmation that shows how many notes will change.
+- Clicking a property or value opens and reveals Search with the query set, even if the Search tab was deferred.
 
 ## 0.2.2
 
